@@ -3,15 +3,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Sidebar } from "./components/Sidebar";
 import { MainContent } from "./components/MainContent";
+import { SettingsModal } from "./components/SettingsModal";
 import { useStudentStore } from "./store/useStudentStore";
 import { processRawPdfText } from "./utils/pdfProcessor";
-import { FileUp, AlertCircle, CheckCircle2, Wand2, FileText } from "lucide-react";
+import { FileUp, AlertCircle, CheckCircle2, Wand2, FileText, Settings } from "lucide-react";
 import { exportConferenceSummary } from "./utils/exportUtils";
 
 function App() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [importCount, setImportCount] = useState<number | null>(null);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const {
         students,
@@ -126,6 +128,14 @@ function App() {
                                 <><FileUp className="w-4 h-4" /> PDF Importieren</>
                             )}
                         </button>
+
+                        <button
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all transform active:scale-95"
+                            title="Einstellungen & Impressum"
+                        >
+                            <Settings className="w-5 h-5" />
+                        </button>
                     </div>
                 </header>
 
@@ -145,7 +155,19 @@ function App() {
 
                     <MainContent />
                 </main>
+
+                {/* Footer Copyright */}
+                <footer className="h-8 border-t border-slate-800 bg-slate-900/30 flex items-center justify-center px-8 shrink-0">
+                    <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">
+                        &copy; Toby Bryson 2026 • AI Powered Report Assistant
+                    </p>
+                </footer>
             </div>
+
+            <SettingsModal
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+            />
         </div>
     );
 }
