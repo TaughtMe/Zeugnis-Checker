@@ -1,0 +1,20 @@
+KI Zeugnis Checker - Wichtige Informationen
+==========================================
+
+Diese App arbeitet vollständig lokal auf diesem Computer. 
+Es werden keine Daten in die Cloud übertragen.
+
+Voraussetzungen:
+----------------
+- LM Studio muss im Hintergrund installiert und gestartet sein.
+- In LM Studio muss ein passendes Modell geladen sein.
+- Der "Local Server" in LM Studio muss aktiviert sein (Standardport: 1234).
+
+Bedienung:
+----------
+1. LM Studio Server starten.
+2. Diese Anwendung öffnen.
+3. Zeugnis-PDFs per Drag & Drop oder Dateiauswahl importieren.
+4. Analyse starten.
+
+Viel Erfolg bei der Zeugnis-Konferenz!
