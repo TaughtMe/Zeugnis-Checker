@@ -1,35 +1,32 @@
 name: Release
-
 on:
   push:
-    tags:
-      - 'v*' # Trigger bei Tags wie v1.0.0
-
-permissions:
-  contents: write
+    branches: [main]
 
 jobs:
   release:
-    runs-on: ${{ matrix.os }}
-
+    permissions:
+      contents: write
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
-
+        platform: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
+      - uses: actions/checkout@v4
+      - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install Dependencies
+          node-version: lts/*
+      - name: install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: install frontend dependencies
         run: npm install
-
-      - name: Build and Publish
-        run: npm run build # Ersetzen Sie dies durch Ihren spezifischen Build-Befehl (z.B. electron-builder --publish always)
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v0.1.0
+          releaseName: "Zeugnis-Checker v0.1.0"
+          releaseDraft: true
+          prerelease: false
