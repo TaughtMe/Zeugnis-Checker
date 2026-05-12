@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { MainContent } from "./components/MainContent";
 import { SettingsModal } from "./components/SettingsModal";
+import { UpdateNotification } from "./components/UpdateNotification";
 import { useStudentStore } from "./store/useStudentStore";
 import { extractPdfText, processRawPdfText } from "./utils/pdfProcessor";
 import { FileUp, AlertCircle, CheckCircle2, Wand2, FileText, Settings } from "lucide-react";
@@ -174,6 +175,8 @@ function App() {
                 isOpen={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
             />
+
+            <UpdateNotification />
         </div>
     );
 }

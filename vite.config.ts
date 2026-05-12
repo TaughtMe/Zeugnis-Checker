@@ -6,7 +6,7 @@ export default defineConfig({
     plugins: [
         react(),
         VitePWA({
-            registerType: "autoUpdate",
+            registerType: "prompt",
             includeAssets: ["icons/favicon-32.png", "icons/icon-128.png"],
             manifest: {
                 name: "KI Zeugnis Checker",
