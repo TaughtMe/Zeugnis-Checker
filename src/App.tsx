@@ -3,16 +3,17 @@ import { Sidebar } from "./components/Sidebar";
 import { MainContent } from "./components/MainContent";
 import { SettingsModal } from "./components/SettingsModal";
 import { UpdateNotification } from "./components/UpdateNotification";
+import { PrivacyBanner } from "./components/PrivacyBanner";
 import { useStudentStore } from "./store/useStudentStore";
-import { extractPdfText, processRawPdfText } from "./utils/pdfProcessor";
-import { FileUp, AlertCircle, CheckCircle2, Wand2, FileText, Settings } from "lucide-react";
-import { exportConferenceSummary } from "./utils/exportUtils";
+import { FileUp, AlertCircle, CheckCircle2, Wand2, FileText, Settings, Upload } from "lucide-react";
+import { exportConferenceSummary, exportConferenceAsPdf } from "./utils/exportUtils";
 
 function App() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [importCount, setImportCount] = useState<number | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const {
@@ -21,14 +22,24 @@ function App() {
         connectionStatus,
         setStudents,
         startBatchAnalysis,
-        checkConnection
+        checkConnection,
+        lastError,
+        setLastError
     } = useStudentStore();
 
     async function handleExport() {
         try {
             await exportConferenceSummary(students);
         } catch (err) {
-            setError(String(err));
+            setError(err instanceof Error ? err.message : String(err));
+        }
+    }
+
+    async function handleExportPdf() {
+        try {
+            await exportConferenceAsPdf(students);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
         }
     }
 
@@ -38,22 +49,36 @@ function App() {
         return () => clearInterval(interval);
     }, [checkConnection]);
 
+    // Surface AI errors that happen during batch analysis
+    useEffect(() => {
+        if (lastError) {
+            setError(lastError);
+            setLastError(null);
+        }
+    }, [lastError, setLastError]);
+
     function handleOpenPdf() {
         fileInputRef.current?.click();
     }
 
-    async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
-        const files = event.target.files ? Array.from(event.target.files) : [];
-        event.target.value = '';
+    async function processFiles(files: File[]) {
         if (files.length === 0) return;
+        const pdfs = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+        if (pdfs.length === 0) {
+            setError('Bitte nur PDF-Dateien ablegen.');
+            return;
+        }
 
         try {
             setLoading(true);
             setError(null);
             setImportCount(null);
 
+            // Lazy-load the PDF processor — keeps pdfjs (~1.3 MB) out of the initial bundle
+            const { extractPdfText, processRawPdfText } = await import('./utils/pdfProcessor');
+
             const all = [];
-            for (const file of files) {
+            for (const file of pdfs) {
                 const extractedText = await extractPdfText(file);
                 const profiles = processRawPdfText(extractedText, file.name, all.length);
                 all.push(...profiles);
@@ -66,6 +91,52 @@ function App() {
             setLoading(false);
         }
     }
+
+    async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+        const files = event.target.files ? Array.from(event.target.files) : [];
+        event.target.value = '';
+        await processFiles(files);
+    }
+
+    // Drag & Drop on the whole window
+    useEffect(() => {
+        let dragCounter = 0;
+
+        function onDragEnter(e: DragEvent) {
+            e.preventDefault();
+            if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+                dragCounter++;
+                setIsDragging(true);
+            }
+        }
+        function onDragOver(e: DragEvent) { e.preventDefault(); }
+        function onDragLeave(e: DragEvent) {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
+                setIsDragging(false);
+            }
+        }
+        function onDrop(e: DragEvent) {
+            e.preventDefault();
+            dragCounter = 0;
+            setIsDragging(false);
+            const files = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
+            processFiles(files);
+        }
+
+        window.addEventListener('dragenter', onDragEnter);
+        window.addEventListener('dragover', onDragOver);
+        window.addEventListener('dragleave', onDragLeave);
+        window.addEventListener('drop', onDrop);
+        return () => {
+            window.removeEventListener('dragenter', onDragEnter);
+            window.removeEventListener('dragover', onDragOver);
+            window.removeEventListener('dragleave', onDragLeave);
+            window.removeEventListener('drop', onDrop);
+        };
+    }, []);
 
     return (
         <div className="flex h-screen bg-slate-950 text-white font-sans overflow-hidden">
@@ -115,14 +186,24 @@ function App() {
                             </button>
                         )}
 
-                        {students.length > 0 && students.every(s => s.status === 'completed') && (
-                            <button
-                                onClick={handleExport}
-                                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white rounded-lg text-sm font-bold transition-all transform active:scale-95 shadow-lg shadow-rose-500/20"
-                            >
-                                <FileText className="w-4 h-4" />
-                                Export für Klassenkonferenz
-                            </button>
+                        {students.length > 0 && students.every(s => s.status === 'completed' || s.status === 'error') && (
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={handleExport}
+                                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white rounded-lg text-sm font-bold transition-all transform active:scale-95 shadow-lg shadow-rose-500/20"
+                                    title="Export als Text-Datei"
+                                >
+                                    <FileText className="w-4 h-4" />
+                                    Export .txt
+                                </button>
+                                <button
+                                    onClick={handleExportPdf}
+                                    className="flex items-center gap-2 px-3 py-2 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-200 rounded-lg text-sm font-bold transition-all transform active:scale-95"
+                                    title="Export als PDF (via Druckdialog → Als PDF speichern)"
+                                >
+                                    PDF
+                                </button>
+                            </div>
                         )}
 
                         <button
@@ -149,12 +230,12 @@ function App() {
 
                 <main className="flex-1 flex min-h-0 relative">
                     {error && (
-                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 flex items-center gap-3 shadow-2xl backdrop-blur-md animate-in zoom-in-95 duration-200">
-                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                            <span className="text-sm font-medium">{error}</span>
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 max-w-2xl p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 flex items-start gap-3 shadow-2xl backdrop-blur-md animate-in zoom-in-95 duration-200">
+                            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                            <span className="text-sm font-medium flex-1">{error}</span>
                             <button
                                 onClick={() => setError(null)}
-                                className="ml-4 hover:text-white transition-colors p-1"
+                                className="ml-2 hover:text-white transition-colors p-1 shrink-0"
                             >
                                 ✕
                             </button>
@@ -177,6 +258,17 @@ function App() {
             />
 
             <UpdateNotification />
+            <PrivacyBanner />
+
+            {isDragging && (
+                <div className="fixed inset-0 z-[300] bg-blue-950/80 backdrop-blur-sm flex items-center justify-center pointer-events-none animate-in fade-in duration-150">
+                    <div className="p-12 border-4 border-dashed border-blue-400 rounded-3xl bg-blue-500/10 flex flex-col items-center gap-4">
+                        <Upload className="w-20 h-20 text-blue-300" />
+                        <p className="text-3xl font-black text-blue-100">PDFs hier ablegen</p>
+                        <p className="text-sm text-blue-200/70">Eine oder mehrere Zeugnis-PDFs gleichzeitig möglich</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

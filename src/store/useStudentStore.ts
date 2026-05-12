@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { StudentProfile, AnalysisResults } from '../types/student';
 import { aiService } from '../services/aiService';
 import { whitelistService } from '../services/whitelistService';
-import { checkPromotionStatus, SubjectGrades, validateTense, generateStatusReason, tenseSanityCheck } from '../utils/msoLogic';
+import { checkPromotionStatus, SubjectGrades, validateTense, generateStatusReason, tenseSanityCheck, isPromotionRelevant } from '../utils/msoLogic';
 
 interface StudentState {
     students: StudentProfile[];
@@ -10,17 +10,26 @@ interface StudentState {
     isAnalyzing: boolean;
     connectionStatus: 'connected' | 'disconnected' | 'checking';
     whitelist: string[];
+    excludedFromAverage: string[];
+    lastError: string | null;
 
     setStudents: (students: StudentProfile[]) => void;
     selectStudent: (id: string | null) => void;
-    updateStudentStatus: (id: string, status: StudentProfile['status'], results?: AnalysisResults) => void;
+    updateStudentStatus: (id: string, status: StudentProfile['status'], results?: AnalysisResults, errorMessage?: string) => void;
     startBatchAnalysis: () => Promise<void>;
     updateStudentName: (id: string, name: string) => void;
+    removeStudent: (id: string) => void;
+    clearAll: () => void;
     checkConnection: () => Promise<void>;
 
     loadWhitelist: () => Promise<void>;
     addToWhitelist: (term: string) => Promise<void>;
     reEvaluateStudentStatus: (id: string) => void;
+
+    toggleSubjectInAverage: (subject: string) => void;
+    initializeExcludedSubjects: () => void;
+
+    setLastError: (message: string | null) => void;
 }
 
 export const useStudentStore = create<StudentState>((set, get) => ({
@@ -29,14 +38,21 @@ export const useStudentStore = create<StudentState>((set, get) => ({
     isAnalyzing: false,
     connectionStatus: 'checking',
     whitelist: [],
+    excludedFromAverage: [],
+    lastError: null,
 
-    setStudents: (students) => set({ students }),
+    setStudents: (students) => set({ students, selectedStudentId: null }),
     selectStudent: (id) => set({ selectedStudentId: id }),
+    setLastError: (message) => set({ lastError: message }),
 
-    updateStudentStatus: (id, status, results) => {
+    updateStudentStatus: (id, status, results, errorMessage) => {
         set((state) => {
             const students = state.students.map((s) => {
                 if (s.id !== id) return s;
+
+                if (status === 'error') {
+                    return { ...s, status, errorMessage };
+                }
 
                 const newResults = results || s.results;
                 let resultStatus: StudentProfile['resultStatus'] = null;
@@ -48,12 +64,11 @@ export const useStudentStore = create<StudentState>((set, get) => ({
                     );
 
                     let detectedTense = newResults.tense;
-                    // Sanity Check: If AI says Präteritum but we find Present indicators, override or at least use for validation
-                    if (detectedTense === 'Präteritum') {
+                    // Sanity-Check nur bei niedriger AI-Confidence
+                    const lowConfidence = (newResults.tenseConfidence ?? 1) < 0.6;
+                    if (lowConfidence && detectedTense === 'Präteritum') {
                         const sanityTense = tenseSanityCheck(s.rawText);
-                        if (sanityTense === 'Präsens') {
-                            detectedTense = 'Präsens'; // Override for better accuracy as requested
-                        }
+                        if (sanityTense === 'Präsens') detectedTense = 'Präsens';
                     }
 
                     const tenseStatus = validateTense(detectedTense, newResults.reportType);
@@ -69,7 +84,7 @@ export const useStudentStore = create<StudentState>((set, get) => ({
 
                     if (promotionStatus === 'danger') {
                         resultStatus = 'danger';
-                    } else if (tenseStatus === 'warning') {
+                    } else if (tenseStatus === 'warning' || filteredHints.length > 0) {
                         resultStatus = 'warning';
                     } else {
                         resultStatus = 'clear';
@@ -87,10 +102,15 @@ export const useStudentStore = create<StudentState>((set, get) => ({
                     });
                 }
 
-                return { ...s, status, results: newResults, resultStatus, statusReason };
+                return { ...s, status, results: newResults, resultStatus, statusReason, errorMessage: undefined };
             });
             return { students };
         });
+
+        // Initialize excluded subjects when first student completes
+        if (status === 'completed') {
+            get().initializeExcludedSubjects();
+        }
     },
 
     checkConnection: async () => {
@@ -108,8 +128,6 @@ export const useStudentStore = create<StudentState>((set, get) => ({
         await whitelistService.addToWhitelist(term);
         const whitelist = await whitelistService.getWhitelist();
         set({ whitelist });
-
-        // Re-evaluate all students
         get().students.forEach(s => get().reEvaluateStudentStatus(s.id));
     },
 
@@ -136,7 +154,7 @@ export const useStudentStore = create<StudentState>((set, get) => ({
         let resultStatus: StudentProfile['resultStatus'] = 'clear';
         if (promotionStatus === 'danger') {
             resultStatus = 'danger';
-        } else if (tenseStatus === 'warning') {
+        } else if (tenseStatus === 'warning' || filteredHints.length > 0) {
             resultStatus = 'warning';
         }
 
@@ -164,6 +182,17 @@ export const useStudentStore = create<StudentState>((set, get) => ({
         }));
     },
 
+    removeStudent: (id) => {
+        set((state) => ({
+            students: state.students.filter(s => s.id !== id),
+            selectedStudentId: state.selectedStudentId === id ? null : state.selectedStudentId
+        }));
+    },
+
+    clearAll: () => {
+        set({ students: [], selectedStudentId: null, excludedFromAverage: [] });
+    },
+
     startBatchAnalysis: async () => {
         const { students, isAnalyzing } = get();
         if (isAnalyzing) return;
@@ -175,36 +204,68 @@ export const useStudentStore = create<StudentState>((set, get) => ({
 
             set((state) => ({
                 students: state.students.map(s =>
-                    s.id === student.id ? { ...s, status: 'processing' } : s
+                    s.id === student.id ? { ...s, status: 'processing', errorMessage: undefined } : s
                 )
             }));
 
             try {
                 const results = await aiService.analyzeReport(student.rawText);
 
-                // Calculate promotionAtRisk using msoLogic
+                // Validation pass: if AI says it's not a valid report or returns no subjects, mark as error
+                if (results.isValidReport === false || (results.subjects.length === 0 && !results.aiStudentName)) {
+                    get().updateStudentStatus(student.id, 'error', undefined,
+                        'Profil konnte nicht als Zeugnis erkannt werden (möglicherweise Deckblatt oder fehlerhafter Split).');
+                    continue;
+                }
+
                 const gradeMap: SubjectGrades = {};
                 (results.subjects || []).forEach(s => {
                     gradeMap[s.name] = s.grade;
                 });
                 results.promotionAtRisk = checkPromotionStatus(gradeMap) === 'danger';
 
-                // Use AI-extracted name if current name is unknown/provisional
                 if (results.aiStudentName && student.name.startsWith('Unbekannter Schüler')) {
                     get().updateStudentName(student.id, results.aiStudentName);
                 }
 
                 get().updateStudentStatus(student.id, 'completed', results);
             } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
                 console.error(`Error processing student ${student.name}:`, error);
-                set((state) => ({
-                    students: state.students.map(s =>
-                        s.id === student.id ? { ...s, status: 'pending' } : s
-                    )
-                }));
+                get().updateStudentStatus(student.id, 'error', undefined, msg);
             }
         }
 
         set({ isAnalyzing: false });
+    },
+
+    toggleSubjectInAverage: (subject) => {
+        set((state) => {
+            const isExcluded = state.excludedFromAverage.includes(subject);
+            return {
+                excludedFromAverage: isExcluded
+                    ? state.excludedFromAverage.filter(s => s !== subject)
+                    : [...state.excludedFromAverage, subject]
+            };
+        });
+    },
+
+    initializeExcludedSubjects: () => {
+        const { students, excludedFromAverage } = get();
+        // Collect all unique subjects across students; default-exclude non-promotion-relevant
+        const allSubjects = new Set<string>();
+        students.forEach(s => (s.results?.subjects || []).forEach(sub => allSubjects.add(sub.name)));
+
+        const seen = new Set(excludedFromAverage);
+        const newDefaults: string[] = [];
+        allSubjects.forEach(subj => {
+            if (!seen.has(subj) && !excludedFromAverage.includes(subj) && !isPromotionRelevant(subj)) {
+                newDefaults.push(subj);
+            }
+        });
+
+        if (newDefaults.length > 0) {
+            set({ excludedFromAverage: [...excludedFromAverage, ...newDefaults] });
+        }
     }
 }));

@@ -1,10 +1,10 @@
 import React from 'react';
 import { useStudentStore } from '../store/useStudentStore';
-import { FileText, Wand2, AlertCircle, Edit2, Check, X, Info } from 'lucide-react';
+import { FileText, Wand2, AlertCircle, Edit2, Check, X, Info, AlertTriangle } from 'lucide-react';
 import { isPromotionRelevant } from '../utils/msoLogic';
 
 export const MainContent: React.FC = () => {
-    const { students, selectedStudentId, addToWhitelist, whitelist, updateStudentName } = useStudentStore();
+    const { students, selectedStudentId, addToWhitelist, whitelist, updateStudentName, excludedFromAverage } = useStudentStore();
     const selectedStudent = students.find(s => s.id === selectedStudentId);
     const [isEditingName, setIsEditingName] = React.useState(false);
     const [editedName, setEditedName] = React.useState('');
@@ -197,23 +197,25 @@ export const MainContent: React.FC = () => {
                                                 {(() => {
                                                     const subjects = selectedStudent.results.subjects || [];
                                                     if (subjects.length === 0) return null;
-                                                    const sum = subjects.reduce((acc, s) => acc + s.grade, 0);
-                                                    const avg = sum / subjects.length;
+                                                    const sumAll = subjects.reduce((acc, s) => acc + s.grade, 0);
+                                                    const avgAll = sumAll / subjects.length;
+                                                    const included = subjects.filter(s => !excludedFromAverage.includes(s.name));
+                                                    const sumSel = included.reduce((acc, s) => acc + s.grade, 0);
+                                                    const avgSel = included.length > 0 ? sumSel / included.length : null;
+                                                    const badge = (v: number) => `inline-flex items-center justify-center min-w-[2.5rem] h-6 px-1.5 rounded-md font-bold text-xs ${v <= 2.5 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : v <= 4 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`;
+                                                    const hasExclusion = excludedFromAverage.some(name => subjects.some(s => s.name === name));
                                                     return (
                                                         <tfoot className="bg-slate-900/50 border-t border-slate-800/50">
                                                             <tr>
-                                                                <td className="py-2 px-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                                                    Ø Durchschnitt
-                                                                </td>
-                                                                <td className="py-2 px-3 text-right">
-                                                                    <span className={`inline-flex items-center justify-center min-w-[2.5rem] h-6 px-1.5 rounded-md font-bold text-xs ${avg <= 2.5 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                                                        avg <= 4 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                                                            'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                                                                        }`}>
-                                                                        {avg.toFixed(2).replace('.', ',')}
-                                                                    </span>
-                                                                </td>
+                                                                <td className="py-2 px-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Ø Gesamt</td>
+                                                                <td className="py-2 px-3 text-right"><span className={badge(avgAll)}>{avgAll.toFixed(2).replace('.', ',')}</span></td>
                                                             </tr>
+                                                            {hasExclusion && avgSel !== null && (
+                                                                <tr className="border-t border-slate-800/30">
+                                                                    <td className="py-2 px-3 text-xs font-bold text-blue-400 uppercase tracking-wider" title="Nur die in den Einstellungen ausgewählten Fächer">Ø Auswahl</td>
+                                                                    <td className="py-2 px-3 text-right"><span className={badge(avgSel)}>{avgSel.toFixed(2).replace('.', ',')}</span></td>
+                                                                </tr>
+                                                            )}
                                                         </tfoot>
                                                     );
                                                 })()}
@@ -223,12 +225,19 @@ export const MainContent: React.FC = () => {
 
                                     <div>
                                         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Zeitform</h3>
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${selectedStudent.results.tense === 'Bunt gemischt'
-                                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                            : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                            }`}>
-                                            {selectedStudent.results.tense}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${selectedStudent.results.tense === 'Bunt gemischt'
+                                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                                }`}>
+                                                {selectedStudent.results.tense}
+                                            </span>
+                                            {typeof selectedStudent.results.tenseConfidence === 'number' && (
+                                                <span className={`text-[10px] font-mono ${selectedStudent.results.tenseConfidence < 0.6 ? 'text-amber-400' : 'text-slate-500'}`} title="KI-Sicherheit bei der Zeitform-Erkennung">
+                                                    KI-Sicherheit: {Math.round(selectedStudent.results.tenseConfidence * 100)}%
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {(selectedStudent.results.lrsHints || []).filter(h => !isIgnored(h)).length > 0 && (
@@ -252,6 +261,19 @@ export const MainContent: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
+                                </div>
+                            ) : selectedStudent.status === 'error' ? (
+                                <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 flex items-start gap-3">
+                                    <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-bold">Analyse fehlgeschlagen</p>
+                                        <p className="text-xs text-rose-200/80 leading-relaxed">
+                                            {selectedStudent.errorMessage || 'Unbekannter Fehler bei der KI-Anfrage.'}
+                                        </p>
+                                        <p className="text-[10px] text-rose-300/60 mt-2">
+                                            Tipp: LM Studio-Verbindung prüfen oder „Analyse starten" erneut anklicken.
+                                        </p>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-12 text-slate-500 italic">
