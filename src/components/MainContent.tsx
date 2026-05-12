@@ -194,6 +194,29 @@ export const MainContent: React.FC = () => {
                                                         );
                                                     })}
                                                 </tbody>
+                                                {(() => {
+                                                    const subjects = selectedStudent.results.subjects || [];
+                                                    if (subjects.length === 0) return null;
+                                                    const sum = subjects.reduce((acc, s) => acc + s.grade, 0);
+                                                    const avg = sum / subjects.length;
+                                                    return (
+                                                        <tfoot className="bg-slate-900/50 border-t border-slate-800/50">
+                                                            <tr>
+                                                                <td className="py-2 px-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                                                    Ø Durchschnitt
+                                                                </td>
+                                                                <td className="py-2 px-3 text-right">
+                                                                    <span className={`inline-flex items-center justify-center min-w-[2.5rem] h-6 px-1.5 rounded-md font-bold text-xs ${avg <= 2.5 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                                                        avg <= 4 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                                                            'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                                                        }`}>
+                                                                        {avg.toFixed(2).replace('.', ',')}
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    );
+                                                })()}
                                             </table>
                                         </div>
                                     </div>
