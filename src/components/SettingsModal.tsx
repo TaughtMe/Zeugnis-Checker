@@ -49,7 +49,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                     <div className="pt-6 border-t border-slate-800">
                         <div className="flex justify-between items-center text-xs text-slate-500">
-                            <span>Version 0.2.0 (PWA)</span>
+                            <span>Version 1.0.0 (PWA)</span>
                             <span>&copy; Toby Bryson 2026</span>
                         </div>
                     </div>
