@@ -42,20 +42,23 @@ function App() {
     }
 
     async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
-        const file = event.target.files?.[0];
-        // reset so the same file can be selected again later
+        const files = event.target.files ? Array.from(event.target.files) : [];
         event.target.value = '';
-        if (!file) return;
+        if (files.length === 0) return;
 
         try {
             setLoading(true);
             setError(null);
             setImportCount(null);
 
-            const extractedText = await extractPdfText(file);
-            const studentProfiles = processRawPdfText(extractedText);
-            setStudents(studentProfiles);
-            setImportCount(studentProfiles.length);
+            const all = [];
+            for (const file of files) {
+                const extractedText = await extractPdfText(file);
+                const profiles = processRawPdfText(extractedText, file.name, all.length);
+                all.push(...profiles);
+            }
+            setStudents(all);
+            setImportCount(all.length);
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
         } finally {
@@ -69,6 +72,7 @@ function App() {
                 ref={fileInputRef}
                 type="file"
                 accept="application/pdf,.pdf"
+                multiple
                 onChange={handleFileSelected}
                 className="hidden"
             />

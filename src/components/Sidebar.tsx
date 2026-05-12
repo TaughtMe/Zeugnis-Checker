@@ -1,14 +1,38 @@
 import React from 'react';
-import { Users, FileText, Loader2 } from 'lucide-react';
+import { Users, FileText, Loader2, ArrowUpDown } from 'lucide-react';
 import { useStudentStore } from '../store/useStudentStore';
 import { StudentProfile } from '../types/student';
 
+type SortMode = 'upload' | 'firstName' | 'lastName';
+
+function getFirstName(fullName: string): string {
+    return fullName.trim().split(/\s+/)[0] || '';
+}
+
+function getLastName(fullName: string): string {
+    const parts = fullName.trim().split(/\s+/);
+    return parts.length > 1 ? parts[parts.length - 1] : parts[0] || '';
+}
+
 export const Sidebar: React.FC = () => {
     const { students, selectedStudentId, selectStudent, isAnalyzing, connectionStatus, loadWhitelist } = useStudentStore();
+    const [sortMode, setSortMode] = React.useState<SortMode>('upload');
 
     React.useEffect(() => {
         loadWhitelist();
     }, [loadWhitelist]);
+
+    const sortedStudents = React.useMemo(() => {
+        const arr = [...students];
+        if (sortMode === 'firstName') {
+            arr.sort((a, b) => getFirstName(a.name).localeCompare(getFirstName(b.name), 'de'));
+        } else if (sortMode === 'lastName') {
+            arr.sort((a, b) => getLastName(a.name).localeCompare(getLastName(b.name), 'de'));
+        } else {
+            arr.sort((a, b) => a.uploadOrder - b.uploadOrder);
+        }
+        return arr;
+    }, [students, sortMode]);
 
     const StatusTrafficLight: React.FC<{ status: StudentProfile['resultStatus'] | 'processing' | 'pending' }> = ({ status }) => {
         if (status === 'processing') return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
@@ -75,6 +99,24 @@ export const Sidebar: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {students.length > 0 && (
+                    <div className="mt-4">
+                        <label className="flex items-center gap-2 text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-1.5">
+                            <ArrowUpDown className="w-3 h-3" />
+                            Sortierung
+                        </label>
+                        <select
+                            value={sortMode}
+                            onChange={(e) => setSortMode(e.target.value as SortMode)}
+                            className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-blue-500"
+                        >
+                            <option value="upload">Upload-Reihenfolge</option>
+                            <option value="firstName">Vorname (A-Z)</option>
+                            <option value="lastName">Nachname (A-Z)</option>
+                        </select>
+                    </div>
+                )}
             </div>
 
             <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
@@ -84,7 +126,7 @@ export const Sidebar: React.FC = () => {
                         <p className="text-sm text-slate-500">Noch keine Schüler importiert.</p>
                     </div>
                 ) : (
-                    students.map((student) => (
+                    sortedStudents.map((student) => (
                         <button
                             key={student.id}
                             onClick={() => selectStudent(student.id)}
@@ -106,6 +148,11 @@ export const Sidebar: React.FC = () => {
                                         }`}>
                                         {getStatusText(student)}
                                     </span>
+                                    {student.className && student.className !== 'Unbekannt' && (
+                                        <span className="ml-auto text-[10px] text-slate-500 font-mono">
+                                            {student.className}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </button>

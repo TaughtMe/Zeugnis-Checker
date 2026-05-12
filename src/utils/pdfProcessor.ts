@@ -5,8 +5,7 @@ import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
 /**
- * Reads a PDF file (selected via <input type="file">) and returns its full text.
- * Runs entirely in the browser — no data leaves the device.
+ * Reads a PDF file and returns its full text. Runs entirely in the browser.
  */
 export async function extractPdfText(file: File): Promise<string> {
     const arrayBuffer = await file.arrayBuffer();
@@ -25,9 +24,32 @@ export async function extractPdfText(file: File): Promise<string> {
 }
 
 /**
- * Splits the raw PDF text into individual student segments and extracts their names.
+ * Try to find a German class designation in a segment.
+ * Matches "Klasse 9a", "Klasse: 10b", "Kl. 7", "Jahrgangsstufe 9" but
+ * deliberately rejects "Klassenleitung" / "Klassenlehrer" via word boundary.
  */
-export function processRawPdfText(fullText: string): StudentProfile[] {
+function extractClassName(segment: string): string {
+    const patterns = [
+        /\b(?:Klasse|Jahrgangsstufe)\b\s*:?\s*(\d{1,2}\s*[A-Za-z]?)\b/,
+        /\bKl\.?\s+(\d{1,2}\s*[A-Za-z]?)\b/,
+    ];
+    for (const re of patterns) {
+        const m = segment.match(re);
+        if (m && m[1]) {
+            return m[1].replace(/\s+/g, '').toUpperCase();
+        }
+    }
+    return 'Unbekannt';
+}
+
+/**
+ * Splits raw PDF text into individual student segments and extracts metadata.
+ */
+export function processRawPdfText(
+    fullText: string,
+    sourceFile: string,
+    startUploadOrder: number
+): StudentProfile[] {
     const rawSegments = fullText.split(/(?=ZWISCHENZEUGNIS|JAHRESZEUGNIS)/i).filter(s => s.trim().length > 0);
 
     const filteredSegments = rawSegments.filter(segment => {
@@ -38,7 +60,7 @@ export function processRawPdfText(fullText: string): StudentProfile[] {
 
     return filteredSegments.map((segment, index) => {
         const nameMatch = segment.match(/(?:Schüler\/in:|Name:)\s*([^\n\r]+)/i);
-        const name = nameMatch ? nameMatch[1].trim() : `Unbekannter Schüler ${index + 1}`;
+        const name = nameMatch ? nameMatch[1].trim() : `Unbekannter Schüler ${startUploadOrder + index + 1}`;
 
         let reportType: AnalysisResults['reportType'] = 'UNBEKANNT';
         if (/ZWISCHENZEUGNIS/i.test(segment)) {
@@ -50,6 +72,9 @@ export function processRawPdfText(fullText: string): StudentProfile[] {
         return {
             id: crypto.randomUUID(),
             name,
+            className: extractClassName(segment),
+            uploadOrder: startUploadOrder + index,
+            sourceFile,
             rawText: segment.trim(),
             status: 'pending',
             resultStatus: null,

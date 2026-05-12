@@ -1,45 +1,61 @@
 import { StudentProfile } from '../types/student';
 
 export const exportConferenceSummary = async (students: StudentProfile[]) => {
-    const endangeredStudents = students.filter(s => s.resultStatus === 'danger');
+    const endangered = students.filter(s => s.resultStatus === 'danger');
 
-    if (endangeredStudents.length === 0) {
+    if (endangered.length === 0) {
         throw new Error('Keine gefährdeten Schüler für den Export gefunden.');
     }
 
-    const classMatch = students[0].rawText.match(/(?:Klasse|Kl\.):?\s*([0-9A-Z]{2,4})/i);
-    const className = classMatch ? classMatch[1].trim() : 'Klasse';
+    // Group by class (fallback "Unbekannt")
+    const groups = new Map<string, StudentProfile[]>();
+    for (const s of endangered) {
+        const cls = s.className && s.className !== 'Unbekannt' ? s.className : 'Unbekannt';
+        if (!groups.has(cls)) groups.set(cls, []);
+        groups.get(cls)!.push(s);
+    }
+    const classNames = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, 'de'));
+
     const dateStr = new Date().toLocaleDateString('de-DE').replace(/\./g, '-');
-    const defaultFileName = `Konferenzliste_Gefährdung_${className}_${dateStr}.txt`;
+    const isSingleClass = classNames.length === 1 && classNames[0] !== 'Unbekannt';
+    const fileSuffix = isSingleClass ? classNames[0] : 'Mehrklassen';
+    const defaultFileName = `Konferenzliste_Gefährdung_${fileSuffix}_${dateStr}.txt`;
 
-    let summary = `ZUSAMMENFASSUNG FÜR KLASSENKONFERENZ\n`;
-    summary += `Klasse: ${className}\n`;
-    summary += `Erstellt am: ${new Date().toLocaleString('de-DE')}\n`;
-    summary += `Anzahl gefährdeter Schüler: ${endangeredStudents.length}\n`;
-    summary += `==========================================\n\n`;
+    let out = `ZUSAMMENFASSUNG FÜR KLASSENKONFERENZ\n`;
+    out += `Erstellt am: ${new Date().toLocaleString('de-DE')}\n`;
+    out += `Klassen: ${classNames.join(', ')}\n`;
+    out += `Anzahl gefährdeter Schüler: ${endangered.length}\n`;
+    out += `==========================================\n\n`;
 
-    endangeredStudents.forEach((s, index) => {
-        summary += `${index + 1}. NAME: ${s.name}\n`;
-        summary += `   STATUS: GEFÄHRDET (Rot)\n`;
+    for (const cls of classNames) {
+        const list = groups.get(cls)!;
+        out += `\n========== KLASSE ${cls} (${list.length} Schüler) ==========\n\n`;
 
-        if (s.results) {
-            const failingGrades = s.results.subjects.filter(sub => sub.grade >= 5);
-            summary += `   KRITISCHE FÄCHER:\n`;
-            failingGrades.forEach(sub => {
-                summary += `     - ${sub.name}: Note ${sub.grade}\n`;
-            });
+        list.forEach((s, index) => {
+            out += `${index + 1}. NAME: ${s.name}\n`;
+            out += `   STATUS: GEFÄHRDET (Rot)\n`;
 
-            if (s.results.lrsHints.length > 0) {
-                summary += `   HINWEISE (LRS/Notenschutz):\n`;
-                s.results.lrsHints.forEach(hint => {
-                    summary += `     - ${hint}\n`;
-                });
+            if (s.results) {
+                const failingGrades = s.results.subjects.filter(sub => sub.grade >= 5);
+                if (failingGrades.length > 0) {
+                    out += `   KRITISCHE FÄCHER:\n`;
+                    failingGrades.forEach(sub => {
+                        out += `     - ${sub.name}: Note ${sub.grade}\n`;
+                    });
+                }
+
+                if (s.results.lrsHints.length > 0) {
+                    out += `   HINWEISE (LRS/Notenschutz):\n`;
+                    s.results.lrsHints.forEach(hint => {
+                        out += `     - ${hint}\n`;
+                    });
+                }
             }
-        }
-        summary += `\n------------------------------------------\n\n`;
-    });
+            out += `\n------------------------------------------\n\n`;
+        });
+    }
 
-    const blob = new Blob([summary], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([out], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

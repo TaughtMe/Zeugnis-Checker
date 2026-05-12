@@ -10,6 +10,9 @@ export interface AnalysisResults {
 export interface StudentProfile {
     id: string;
     name: string;
+    className: string;
+    uploadOrder: number;
+    sourceFile: string;
     rawText: string;
     status: 'pending' | 'processing' | 'completed';
     resultStatus: 'danger' | 'warning' | 'clear' | null;
