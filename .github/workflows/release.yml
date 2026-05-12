@@ -1,32 +1,31 @@
-name: Release
+name: Build PWA
+
 on:
   push:
-    branches: [main]
+    branches: [main, Claude_PWA_Zeugnis_Checker]
+  workflow_dispatch:
 
 jobs:
-  release:
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [macos-latest, windows-latest]
-    runs-on: ${{ matrix.platform }}
+  build:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: setup node
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
-      - name: install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: install frontend dependencies
-        run: npm install
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build PWA
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          tagName: v0.1.0
-          releaseName: "Zeugnis-Checker v0.1.0"
-          releaseDraft: true
-          prerelease: false
+          name: dist
+          path: dist
+          retention-days: 30

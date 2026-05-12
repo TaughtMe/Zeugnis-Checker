@@ -28,19 +28,28 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Nutzungshinweise</h3>
                         <p className="text-slate-300 leading-relaxed">
-                            Die App ist vorgesehen mit <span className="text-blue-400 font-medium">Lokalen KI Modellen von LM Studios</span> betrieben zu werden.
+                            Diese PWA ist vorgesehen mit <span className="text-blue-400 font-medium">Lokalen KI Modellen von LM Studio</span> (http://localhost:1234) betrieben zu werden.
                         </p>
+                        <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                            <p className="text-emerald-200 text-sm leading-relaxed">
+                                <strong>Datenschutz by Design:</strong> Alle Zeugnis-Daten verbleiben ausschließlich
+                                im Arbeitsspeicher dieses Browser-Tabs. Beim Schließen werden sie automatisch verworfen.
+                                Es findet keine Speicherung in localStorage, IndexedDB oder auf der Festplatte statt.
+                                Eine strenge Content-Security-Policy erlaubt ausgehende Verbindungen ausschließlich
+                                an localhost:1234 (LM Studio).
+                            </p>
+                        </div>
                         <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
                             <p className="text-amber-200 text-sm leading-relaxed">
-                                <strong>Datenschutz-Hinweis:</strong> Cloud API Lösungen sind nicht Datenschutzkonform.
-                                Der Nutzer ist dafür verantwortlich eine Datenschutzkonforme KI Lösung zum verarbeiten der Daten zu verwenden.
+                                <strong>Hinweis:</strong> Cloud-API-Lösungen sind nicht datenschutzkonform.
+                                Der Nutzer ist dafür verantwortlich, ein datenschutzkonformes lokales KI-Modell zu verwenden.
                             </p>
                         </div>
                     </div>
 
                     <div className="pt-6 border-t border-slate-800">
                         <div className="flex justify-between items-center text-xs text-slate-500">
-                            <span>Version 1.0.0</span>
+                            <span>Version 0.2.0 (PWA)</span>
                             <span>&copy; Toby Bryson 2026</span>
                         </div>
                     </div>

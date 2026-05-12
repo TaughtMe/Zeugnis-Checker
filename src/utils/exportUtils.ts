@@ -1,5 +1,3 @@
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { StudentProfile } from '../types/student';
 
 export const exportConferenceSummary = async (students: StudentProfile[]) => {
@@ -9,7 +7,6 @@ export const exportConferenceSummary = async (students: StudentProfile[]) => {
         throw new Error('Keine gefährdeten Schüler für den Export gefunden.');
     }
 
-    // Try to extract class name from the first student's text
     const classMatch = students[0].rawText.match(/(?:Klasse|Kl\.):?\s*([0-9A-Z]{2,4})/i);
     const className = classMatch ? classMatch[1].trim() : 'Klasse';
     const dateStr = new Date().toLocaleDateString('de-DE').replace(/\./g, '-');
@@ -42,23 +39,15 @@ export const exportConferenceSummary = async (students: StudentProfile[]) => {
         summary += `\n------------------------------------------\n\n`;
     });
 
-    try {
-        const filePath = await save({
-            title: 'Konferenzliste speichern',
-            filters: [{
-                name: 'Textdokument',
-                extensions: ['txt']
-            }],
-            defaultPath: defaultFileName
-        });
+    const blob = new Blob([summary], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = defaultFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 
-        if (filePath) {
-            await writeTextFile(filePath, summary);
-            return true;
-        }
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        throw new Error(`Export fehlgeschlagen: ${errorMessage}`);
-    }
-    return false;
+    return true;
 };

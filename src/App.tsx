@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { MainContent } from "./components/MainContent";
 import { SettingsModal } from "./components/SettingsModal";
 import { useStudentStore } from "./store/useStudentStore";
-import { processRawPdfText } from "./utils/pdfProcessor";
+import { extractPdfText, processRawPdfText } from "./utils/pdfProcessor";
 import { FileUp, AlertCircle, CheckCircle2, Wand2, FileText, Settings } from "lucide-react";
 import { exportConferenceSummary } from "./utils/exportUtils";
 
@@ -14,6 +12,7 @@ function App() {
     const [error, setError] = useState<string | null>(null);
     const [importCount, setImportCount] = useState<number | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const {
         students,
@@ -32,35 +31,33 @@ function App() {
         }
     }
 
-    // Heartbeat check on mount and every 30 seconds
     useEffect(() => {
         checkConnection();
         const interval = setInterval(checkConnection, 30000);
         return () => clearInterval(interval);
     }, [checkConnection]);
 
-    async function handleOpenPdf() {
+    function handleOpenPdf() {
+        fileInputRef.current?.click();
+    }
+
+    async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+        const file = event.target.files?.[0];
+        // reset so the same file can be selected again later
+        event.target.value = '';
+        if (!file) return;
+
         try {
             setLoading(true);
             setError(null);
             setImportCount(null);
 
-            const selected = await open({
-                multiple: false,
-                filters: [{
-                    name: 'PDF',
-                    extensions: ['pdf']
-                }]
-            });
-
-            if (selected && typeof selected === 'string') {
-                const extractedText = await invoke<string>("read_pdf_text", { path: selected });
-                const studentProfiles = processRawPdfText(extractedText);
-                setStudents(studentProfiles);
-                setImportCount(studentProfiles.length);
-            }
+            const extractedText = await extractPdfText(file);
+            const studentProfiles = processRawPdfText(extractedText);
+            setStudents(studentProfiles);
+            setImportCount(studentProfiles.length);
         } catch (err) {
-            setError(String(err));
+            setError(err instanceof Error ? err.message : String(err));
         } finally {
             setLoading(false);
         }
@@ -68,10 +65,16 @@ function App() {
 
     return (
         <div className="flex h-screen bg-slate-950 text-white font-sans overflow-hidden">
-            {/* Sidebar Section */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={handleFileSelected}
+                className="hidden"
+            />
+
             <Sidebar />
 
-            {/* Main Content Wall */}
             <div className="flex-1 flex flex-col min-w-0">
                 <header className="h-16 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-8 shrink-0">
                     <div className="flex items-center gap-4">
@@ -156,7 +159,6 @@ function App() {
                     <MainContent />
                 </main>
 
-                {/* Footer Copyright */}
                 <footer className="h-8 border-t border-slate-800 bg-slate-900/30 flex items-center justify-center px-8 shrink-0">
                     <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">
                         &copy; Toby Bryson 2026 • AI Powered Report Assistant
@@ -173,4 +175,3 @@ function App() {
 }
 
 export default App;
-

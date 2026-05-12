@@ -1,20 +1,60 @@
 KI Zeugnis Checker - Wichtige Informationen
 ==========================================
 
-Diese App arbeitet vollständig lokal auf diesem Computer. 
-Es werden keine Daten in die Cloud übertragen.
+Diese App läuft als Progressive Web App (PWA) im Browser und arbeitet
+vollständig lokal. Es werden keine Zeugnis-Daten an externe Server
+übertragen — die einzige erlaubte Netzwerkverbindung (per Content
+Security Policy erzwungen) geht zu LM Studio auf http://localhost:1234.
+
+Plattformen:
+------------
+- Windows / macOS / Linux: in jedem modernen Browser (Chrome, Edge,
+  Safari, Firefox) lauffähig. Auf macOS und Windows kann die PWA
+  zusätzlich über das Browser-Menü "Installieren" als App eingerichtet
+  werden.
 
 Voraussetzungen:
 ----------------
-- LM Studio muss im Hintergrund installiert und gestartet sein.
+- LM Studio muss installiert und gestartet sein.
 - In LM Studio muss ein passendes Modell geladen sein.
-- Der "Local Server" in LM Studio muss aktiviert sein (Standardport: 1234).
+- Der "Local Server" in LM Studio muss aktiviert sein (Port 1234).
+- In den LM-Studio-Einstellungen muss CORS aktiviert sein
+  (Setting "Enable CORS" / "Allow All Origins"), damit der Browser die
+  Anfragen aus der PWA an localhost:1234 zulässt.
 
 Bedienung:
 ----------
 1. LM Studio Server starten.
-2. Diese Anwendung öffnen.
-3. Zeugnis-PDFs per Drag & Drop oder Dateiauswahl importieren.
-4. Analyse starten.
+2. Die PWA im Browser öffnen (lokal mit `npm run dev` oder über
+   den deployten Host, z.B. Cloudflare Pages).
+3. Zeugnis-PDF per Button "PDF Importieren" auswählen.
+4. "Analyse starten" klicken.
+5. Optional: "Export für Klassenkonferenz" lädt eine .txt-Datei
+   mit den gefährdeten Schülern herunter.
+
+Datenschutz:
+------------
+- Alle Zeugnis-Daten existieren ausschließlich im RAM des
+  Browser-Tabs. Beim Schließen des Tabs werden sie verworfen.
+- Es wird NICHT in localStorage, sessionStorage, IndexedDB oder
+  auf die Festplatte geschrieben.
+- Eine strikte Content-Security-Policy blockiert jeden ausgehenden
+  Netzwerk-Call außer zu http://localhost:1234.
+- Die Whitelist für ignorierte LRS-Hinweise lebt nur in-memory und
+  geht beim Schließen ebenfalls verloren — das ist gewollt.
+
+Entwicklung:
+------------
+- npm install
+- npm run dev        (lokaler Dev-Server auf Port 5173)
+- npm run build      (statisches Build in ./dist)
+- npm run preview    (Vorschau des Builds)
+
+Deployment:
+-----------
+Der Inhalt von ./dist kann auf jedem statischen Host abgelegt werden
+(z.B. Cloudflare Pages, GitHub Pages, Netlify). Cloudflare Pages liest
+die Datei public/_headers automatisch ein und setzt damit die CSP
+zusätzlich als HTTP-Header.
 
 Viel Erfolg bei der Zeugnis-Konferenz!
