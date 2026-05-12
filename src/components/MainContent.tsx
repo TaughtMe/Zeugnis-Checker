@@ -59,6 +59,21 @@ export const MainContent: React.FC = () => {
                         <p className="text-sm">Analyse starten und Ampeln in der Schülerliste prüfen.</p>
                     </div>
                 </div>
+
+                <div className="mt-8 max-w-4xl w-full p-5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-left">
+                    <h4 className="text-amber-300 font-bold mb-2 flex items-center gap-2 text-sm uppercase tracking-wider">
+                        <Info className="w-4 h-4" />
+                        Wichtig: CORS in LM Studio aktivieren
+                    </h4>
+                    <p className="text-amber-100/90 text-sm leading-relaxed">
+                        Da diese App im Browser läuft, muss LM Studio Anfragen aus dem Browser zulassen.
+                        Öffne dazu in LM Studio den <span className="font-semibold">Local Server</span> Tab und aktiviere
+                        die Option <span className="font-semibold">„Enable CORS"</span> (oder
+                        <span className="font-semibold"> „Allow All Origins"</span>) <em>bevor</em> du den Server startest.
+                        Ohne diese Einstellung wird die Verbindung vom Browser blockiert und in der Seitenleiste
+                        erscheint „Nicht gefunden".
+                    </p>
+                </div>
             </div>
         );
     }
