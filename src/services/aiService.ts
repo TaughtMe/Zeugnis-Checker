@@ -23,7 +23,19 @@ EXTRAKTIONS-REGELN:
    Wenn nicht gefunden, gib "UNBEKANNT" zurück.
    WICHTIG zum Tempus-Check: Ein ZWISCHENZEUGNIS MUSS im Präsens stehen,
    ein JAHRESZEUGNIS MUSS im Präteritum stehen.
-6. lrsHints: Hinweise auf Lese-Rechtschreib-Schwäche, Legasthenie oder Notenschutz.
+6. lrsHints: NUR explizite Hinweise auf rechtliche/formelle Sonderregelungen
+   beim Schreiben/Lesen. Aufnehmen nur, wenn der Text EINEN der folgenden
+   Begriffe wortwörtlich enthält:
+   - "LRS", "Lese-Rechtschreib-Schwäche", "Lese-Rechtschreib-Störung"
+   - "Legasthenie", "Legastheniker"
+   - "Notenschutz", "Nachteilsausgleich"
+   - "Rechtschreibung wird nicht bewertet", "Rechtschreibleistung wurde nicht
+     in die Bewertung einbezogen"
+   - "Bewertung der Rechtschreibung ausgesetzt"
+   STRIKT VERBOTEN: Reine Beschreibungen des Lernverhaltens, der Reflexion,
+   der Mitarbeit, der Konzentration, der Lernfortschritte oder ähnliches
+   sind KEINE LRS-Hinweise. Wenn keiner der oben genannten Begriffe
+   wortwörtlich vorkommt → leeres Array [].
 7. isValidReport: true, wenn der Text wirklich ein deutsches Schulzeugnis-Profil ist
    (mit Schülername UND Noten). false, wenn es z.B. ein Deckblatt, eine Anleitung,
    eine Liste oder sonstiger Müll ist.
@@ -103,6 +115,24 @@ export const aiService = {
     },
 };
 
+const LRS_KEYWORDS = [
+    'lrs',
+    'lese-rechtschreib',
+    'leserechtschreib',
+    'legasthen',
+    'notenschutz',
+    'nachteilsausgleich',
+    'rechtschreibung wird nicht',
+    'rechtschreibung nicht bewertet',
+    'rechtschreibleistung',
+    'bewertung der rechtschreibung'
+];
+
+function isRealLrsHint(hint: string): boolean {
+    const lower = hint.toLowerCase();
+    return LRS_KEYWORDS.some(kw => lower.includes(kw));
+}
+
 function parseAIResponse(content: string): AnalysisResults {
     let parsed: Record<string, unknown>;
     try {
@@ -113,11 +143,16 @@ function parseAIResponse(content: string): AnalysisResults {
         throw new Error('KI-Antwort konnte nicht als JSON gelesen werden.');
     }
 
+    const rawHints = Array.isArray(parsed.lrsHints) ? parsed.lrsHints as string[] : [];
+    // Clientseitiges Safety-Net gegen Halluzinationen: jeder Hint muss eines
+    // der LRS-Schlüsselwörter enthalten, sonst wird er verworfen.
+    const cleanedHints = rawHints.filter(isRealLrsHint);
+
     return {
         subjects: Array.isArray(parsed.subjects) ? parsed.subjects as { name: string; grade: number }[] : [],
         tense: (parsed.tense as AnalysisResults['tense']) || 'Bunt gemischt',
         tenseConfidence: typeof parsed.tenseConfidence === 'number' ? parsed.tenseConfidence : undefined,
-        lrsHints: Array.isArray(parsed.lrsHints) ? parsed.lrsHints as string[] : [],
+        lrsHints: cleanedHints,
         promotionAtRisk: false,
         reportType: (parsed.reportType as AnalysisResults['reportType']) || 'UNBEKANNT',
         aiStudentName: (parsed.studentName as string) || null,
